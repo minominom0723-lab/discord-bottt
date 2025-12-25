@@ -76,8 +76,10 @@ client.on("messageCreate", async (message) => {
 
   // ===== メンション数 =====
   const mentionCount =
-    (message.mentions.users?.size || 0) +
-    (message.mentions.roles?.size || 0);
+  (message.mentions.users?.size || 0) +
+  (message.mentions.roles?.size || 0) +
+  (message.mentions.everyone ? 1 : 0); 
+  // @everyone/@here 対策
 
   // ===== 連投 =====
   const countInWindow = pushTimestamp(message.author.id);
@@ -135,6 +137,7 @@ client.login(TOKEN);
 const app = express();
 app.get("/", (req, res) => res.send("Bot is running"));
 app.listen(process.env.PORT || 3000, () => console.log("Web server started"));
+
 
 
 
