@@ -106,7 +106,7 @@ client.on("messageCreate", async (message) => {
   ).catch(() => null);
 
   // 通知（← あとで色分けここでやる）
-});
+
 
   // 通知
 // 通知
@@ -141,5 +141,6 @@ client.login(TOKEN);
 const app = express();
 app.get("/", (req, res) => res.send("Bot is running"));
 app.listen(process.env.PORT || 3000, () => console.log("Web server started"));
+
 
 
