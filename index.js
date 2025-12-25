@@ -1,7 +1,7 @@
 import * as Discord from "discord.js";
 import express from "express";
 
-const { Client, GatewayIntentBits } = Discord;
+const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField } = Discord;
 
 // ====== 設定（RenderのEnvironment Variablesで入れるの推奨） ======
 const TOKEN = process.env.TOKEN; // Discord Bot Token
@@ -74,6 +74,26 @@ client.on("messageCreate", async (message) => {
   if (!message.guild) return;
   if (message.author.bot) return;
 
+  // ===== スパム検知 =====
+  // ===== メンション検知 =====
+
+  // ===== コマンド処理 =====
+  if (!message.content.startsWith("!")) return;
+
+  const args = message.content.slice(1).trim().split(/\s+/);
+  const command = args.shift()?.toLowerCase();
+
+  // !status コマンド
+  if (command === "status") {
+    await message.reply(
+      "🟢 Botは稼働中です\n" +
+      "・新規参加者チェック：ON\n" +
+      "・スパム検知：ON\n" +
+      "・メンション過多検知：ON"
+    );
+  }
+});
+
   // メンション多すぎ
   const mentionCount =
     (message.mentions.users?.size || 0) +
@@ -121,3 +141,4 @@ client.login(TOKEN);
 const app = express();
 app.get("/", (req, res) => res.send("Bot is running"));
 app.listen(process.env.PORT || 3000, () => console.log("Web server started"));
+
