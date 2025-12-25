@@ -74,27 +74,7 @@ client.on("messageCreate", async (message) => {
   if (!message.guild) return;
   if (message.author.bot) return;
 
-  // ===== スパム検知 =====
-  // ===== メンション検知 =====
-
-  // ===== コマンド処理 =====
-  if (!message.content.startsWith("!")) return;
-
-  const args = message.content.slice(1).trim().split(/\s+/);
-  const command = args.shift()?.toLowerCase();
-
-  // !status コマンド
-  if (command === "status") {
-    await message.reply(
-      "🟢 Botは稼働中です\n" +
-      "・新規参加者チェック：ON\n" +
-      "・スパム検知：ON\n" +
-      "・メンション過多検知：ON"
-    );
-  }
-});
-
-  // メンション多すぎ
+  // メンション数
   const mentionCount =
     (message.mentions.users?.size || 0) +
     (message.mentions.roles?.size || 0);
@@ -105,11 +85,12 @@ client.on("messageCreate", async (message) => {
   const isMentionSpam = mentionCount >= MENTION_LIMIT;
   const isFlood = countInWindow >= SPAM_COUNT;
 
+  // ← この return は「ここ」ならOK
   if (!isMentionSpam && !isFlood) return;
 
-  // 権限チェック（botに「タイムアウト」権限が必要）
+  // 権限チェック
   const me = message.guild.members.me;
-  if (!me?.permissions.has(Discord.PermissionsBitField.Flags.ModerateMembers)) {
+  if (!me?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
     console.log("Missing permission: ModerateMembers");
     return;
   }
@@ -117,20 +98,39 @@ client.on("messageCreate", async (message) => {
   const member = await message.guild.members.fetch(message.author.id).catch(() => null);
   if (!member) return;
 
-  const channel = await getAlertChannel(message.guild);
-
-  // タイムアウト実行
+  // タイムアウト
   const ms = TIMEOUT_MIN * 60 * 1000;
-  await member.timeout(ms, isMentionSpam ? "Mention spam" : "Message spam").catch(() => null);
+  await member.timeout(
+    ms,
+    isMentionSpam ? "Mention spam" : "Message spam"
+  ).catch(() => null);
+
+  // 通知（← あとで色分けここでやる）
+});
 
   // 通知
-  if (channel) {
-    await channel.send(
-      `🛑 **AutoMod処理（Bot側）**\n` +
-      `対象: ${message.author.tag} (${message.author.id})\n` +
-      `理由: ${isMentionSpam ? `メンション過多(${mentionCount})` : `連投(${countInWindow}/${SPAM_WINDOW_SEC}s)`}\n` +
-      `処置: ${TIMEOUT_MIN}分タイムアウト\n` +
-      `場所: <#${message.channelId}>`
+// 通知
+const embed = new EmbedBuilder()
+  .setColor(isMentionSpam ? 0xE53935 : 0xFBC02D)
+  .setTitle(
+    isMentionSpam
+      ? "⚠️ タイムアウト（過度なメンション）"
+      : "⚠️ タイムアウト（スパム検知）"
+  )
+  .setDescription(
+    isMentionSpam
+      ? `<@${message.author.id}>\n異常なメンションを検知したため **1日間タイムアウト** されました。`
+      : `<@${message.author.id}>\nスパムを検知したため **1日間タイムアウト** されました。`
+  )
+  .addFields(
+    { name: "理由", value: isMentionSpam ? "メンション過多" : "連続投稿", inline: true },
+    { name: "処置", value: "24時間タイムアウト", inline: true }
+  )
+  .setFooter({ text: "AutoMod System" })
+  .setTimestamp();
+
+// スパム・メンションはそのチャンネルに通知
+await message.channel.send({ embeds: [embed] }).catch(() => null);
     );
   }
 });
@@ -141,4 +141,5 @@ client.login(TOKEN);
 const app = express();
 app.get("/", (req, res) => res.send("Bot is running"));
 app.listen(process.env.PORT || 3000, () => console.log("Web server started"));
+
 
