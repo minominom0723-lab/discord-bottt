@@ -5,11 +5,20 @@ const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField } = Discord
 
 // ====== 設定（RenderのEnvironment Variablesで入れるの推奨） ======
 const TOKEN = process.env.TOKEN; // Discord Bot Token
-const ALERT_CHANNEL_ID = process.env.ALERT_CHANNEL_ID || "1335258197669183590"; // 監視通知先（あなたのIDでOK）
-const MENTION_LIMIT = Number(process.env.MENTION_LIMIT || 5); // 1メッセで@がこれ以上ならアウト
-const SPAM_COUNT = Number(process.env.SPAM_COUNT || 6);       // この回数
-const SPAM_WINDOW_SEC = Number(process.env.SPAM_WINDOW_SEC || 8); // この秒数以内に連投したらアウト
-const TIMEOUT_MIN = Number(process.env.TIMEOUT_MIN || 60 * 24);   // タイムアウト時間（分）= 24h
+const ALERT_CHANNEL_ID = process.env.ALERT_CHANNEL_ID || "1335258197669183590";
+
+const MENTION_LIMIT = Number(process.env.MENTION_LIMIT || 3); // 3秒で3回以上メンション
+const SPAM_COUNT = Number(process.env.SPAM_COUNT || 3);       // 3秒で3回以上メッセージ
+const SPAM_WINDOW_SEC = Number(process.env.SPAM_WINDOW_SEC || 3); // 判定時間3秒
+const TIMEOUT_MIN = Number(process.env.TIMEOUT_MIN || 60 * 24);   // 1日
+
+const EXEMPT_USER_IDS = [
+  "1103132552979554346", // おやつ
+  "756362386453168171",  // りつ
+  "952851392639410208",  // みのむし
+  "1119797155402633328", // だいふく
+  "914417538396467201"   // みやゆめ
+];
 
 // ====== Discord Client ======
 const client = new Client({
@@ -23,7 +32,24 @@ const client = new Client({
 
 // ====== 簡易スパム検知用メモリ（再起動するとリセット） ======
 const recentMsgs = new Map(); // userId -> [timestamp, timestamp, ...]
+const mentionHistory = new Map(); // userId -> [timestamp, timestamp, ...]
 
+function pushMentionTimestamp(userId, mentionCount) {
+  const now = Date.now();
+  const arr = mentionHistory.get(userId) || [];
+
+  if (mentionCount > 0) {
+    arr.push(now);
+  }
+
+  const windowMs = SPAM_WINDOW_SEC * 1000;
+  while (arr.length && now - arr[0] > windowMs) {
+    arr.shift();
+  }
+
+  mentionHistory.set(userId, arr);
+  return arr.length;
+}
 function pushTimestamp(userId) {
   const now = Date.now();
   const arr = recentMsgs.get(userId) || [];
@@ -73,6 +99,44 @@ client.on("guildMemberAdd", async (member) => {
 client.on("messageCreate", async (message) => {
   if (!message.guild) return;
   if (message.author.bot) return;
+  if (EXEMPT_USER_IDS.includes(message.author.id)) return;
+
+  if (message.mentions.everyone) {
+    const me = message.guild.members.me;
+
+    if (!me?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+      console.log("Missing permission: ModerateMembers");
+      return;
+    }
+
+    const member = await message.guild.members
+      .fetch(message.author.id)
+      .catch(() => null);
+    if (!member) return;
+
+    const ms = TIMEOUT_MIN * 60 * 1000;
+
+    await member
+      .timeout(ms, "Everyone/Here mention")
+      .catch(() => null);
+
+    const embed = new EmbedBuilder()
+      .setColor(0xE53935)
+      .setTitle("⚠ 異常なメンションを検知")
+      .setDescription(
+        `<@${message.author.id}>\n異常なメンションを検知したため **1日間タイムアウト** されました。`
+      )
+      .addFields(
+        { name: "処置", value: "24時間タイムアウト", inline: true }
+      )
+      .setTimestamp();
+
+    await message.channel
+      .send({ embeds: [embed] })
+      .catch(() => null);
+
+    return;
+  }
 
   // ===== メンション数 =====
   const mentionCount =
