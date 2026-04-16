@@ -1,7 +1,7 @@
 import * as Discord from "discord.js";
 import express from "express";
 
-const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField } = Discord;
+const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, Partials } = Discord;
 
 // ====== 設定（RenderのEnvironment Variablesで入れるの推奨） ======
 const TOKEN = process.env.TOKEN; // Discord Bot Token
@@ -31,7 +31,9 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.DirectMessages,
   ],
+  partials: [Partials.Channel],
 });
 
 // ====== 簡易スパム検知用メモリ（再起動するとリセット） ======
