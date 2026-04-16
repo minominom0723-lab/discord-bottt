@@ -19,7 +19,11 @@ const EXEMPT_USER_IDS = [
   "1119797155402633328", // だいふく
   "914417538396467201"   // みやゆめ
 ];
+const ADMIN_USER_IDS = [
+  "952851392639410208" // みのむし
+];
 
+const autoTimeoutUserIds = new Set();
 // ====== Discord Client ======
 const client = new Client({
   intents: [
@@ -97,10 +101,74 @@ client.on("guildMemberAdd", async (member) => {
 
 // ====== ① スパム/メンション連投 → 24hタイムアウト＋通知 ======
 client.on("messageCreate", async (message) => {
+ // ===== DMコマンド：自動1時間タイムアウト対象の追加/解除 =====
+  if (!message.guild) {
+    if (message.author.bot) return;
+
+    if (!ADMIN_USER_IDS.includes(message.author.id)) {
+      await message.reply("このコマンドは使用できません。");
+      return;
+    }
+const lines = message.content.trim().split(/\r?\n/);
+    const targetUserId = lines[0].trim();
+    const flag = lines[1].trim().toLowerCase();
+
+    if (!/^\d{17,20}$/.test(targetUserId)) {
+      await message.reply("IDが正しくな");
+      return;
+    }
+if (lines.length < 2) {
+  await message.reply("形式が違います\nユーザーID\ntrue or false");
+  return;
+}
+    if (flag !== "true" && flag !== "false") {
+      await message.reply("2行目は t か f を送ってください。");
+      return;
+    }
+
+    if (flag === "true") {
+      autoTimeoutUserIds.add(targetUserId);
+      await message.reply(`ユーザーID ${targetUserId} を自動1時間タイムアウト対象に追加しました。`);
+    } else {
+      autoTimeoutUserIds.delete(targetUserId);
+      await message.reply(`ユーザーID ${targetUserId} を自動1時間タイムアウト対象から解除しました。`);
+    }
+
+    return;
+  }
   if (!message.guild) return;
   if (message.author.bot) return;
   if (EXEMPT_USER_IDS.includes(message.author.id)) return;
+// ===== 指定ユーザーは発言するたび1時間タイムアウト =====
+  if (autoTimeoutUserIds.has(message.author.id)) {
+    const me = message.guild.members.me;
 
+    if (!me?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+      console.log("Missing permission: ModerateMembers");
+      return;
+    }
+
+    const member = await message.guild.members
+      .fetch(message.author.id)
+      .catch(() => null);
+    if (!member) return;
+
+    const ms = 60 * 60 * 1000; // 1時間
+
+    await member.timeout(ms, "Auto timeout").catch(() => null);
+
+    const embed = new EmbedBuilder()
+      .setColor(0xff0000)
+      .setTitle("⚠️ 自動タイムアウト")
+      .setDescription(
+        `<@${message.author.id}>\n発言したため **1時間タイムアウト** されました。`
+      )
+      .setTimestamp();
+
+    await message.channel.send({ embeds: [embed] }).catch(() => null);
+
+    return;
+  }
   if (message.mentions.everyone) {
     const me = message.guild.members.me;
 
